@@ -1,0 +1,23 @@
+{
+    "baseline_config": {
+        "family": "fp16",
+        "bit_width": 16,
+        "description": "FP16 baseline reference"
+    },
+    "quant_config": {
+        "family": "int8",
+        "bit_width": 8,
+        "custom_params": {}
+    },
+    "relative_latency": 0.7,
+    "relative_memory": 0.25,
+    "quality_risk_level": 0.0,
+    "metadata": {
+        "reference": "NVIDIA TensorRT-LLM: INT8 vs FP16 benchmarks",
+        "calculation_notes": {
+            "relative_latency": "< 1.0 means faster than baseline",
+            "relative_memory": "< 1.0 means smaller memory footprint than baseline",
+            "quality_risk_level": "0.0=LOW, 0.5=MEDIUM, 1.0=HIGH risk of quality degradation"
+        }
+    }
+}
