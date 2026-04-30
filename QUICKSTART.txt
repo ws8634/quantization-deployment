@@ -1,0 +1,171 @@
+LLM Quantization Analyzer - 快速开始命令序列
+================================================================================
+
+环境要求: Python 3.7+ (无第三方依赖)
+
+--------------------------------------------------------------------------------
+1. 进入项目目录
+--------------------------------------------------------------------------------
+
+cd 14-llm-quantization-deployment
+
+--------------------------------------------------------------------------------
+2. 查看帮助
+--------------------------------------------------------------------------------
+
+python -m llm_quant_analyzer --help
+
+# 查看各子命令帮助
+python -m llm_quant_analyzer list --help
+python -m llm_quant_analyzer analyze --help
+python -m llm_quant_analyzer validate --help
+
+# 查看错误码说明
+python -m llm_quant_analyzer validate --help-errors
+
+--------------------------------------------------------------------------------
+3. 列出支持的量化类型
+--------------------------------------------------------------------------------
+
+# 人类可读格式
+python -m llm_quant_analyzer list
+
+# JSON 格式
+python -m llm_quant_analyzer list --json
+
+--------------------------------------------------------------------------------
+4. 分析量化影响
+--------------------------------------------------------------------------------
+
+# 分析 INT8 量化 (相对于 FP16 基线)
+python -m llm_quant_analyzer analyze --family int8 --bit-width 8
+
+# 分析 INT4 量化
+python -m llm_quant_analyzer analyze --family int4 --bit-width 4
+
+# 分析 GGUF 各类型
+python -m llm_quant_analyzer analyze --family gguf --bit-width 2   # Q2_K
+python -m llm_quant_analyzer analyze --family gguf --bit-width 3   # Q3_K_M
+python -m llm_quant_analyzer analyze --family gguf --bit-width 4   # Q4_K_M (推荐)
+python -m llm_quant_analyzer analyze --family gguf --bit-width 5   # Q5_K_M
+python -m llm_quant_analyzer analyze --family gguf --bit-width 6   # Q6_K
+python -m llm_quant_analyzer analyze --family gguf --bit-width 8   # Q8_0
+
+# 使用自定义基线 (FP32)
+python -m llm_quant_analyzer analyze --family int8 --bit-width 8 \
+    --baseline-family fp32 --baseline-bit-width 32
+
+# 保存结果到文件
+python -m llm_quant_analyzer analyze --family int8 --bit-width 8 > result.json
+
+--------------------------------------------------------------------------------
+5. 验证 JSON 结果
+--------------------------------------------------------------------------------
+
+# 从文件验证
+python -m llm_quant_analyzer validate --file result.json
+
+# 从标准输入验证
+python -m llm_quant_analyzer analyze --family int8 --bit-width 8 | python -m llm_quant_analyzer validate
+
+# 验证示例文件
+python -m llm_quant_analyzer validate --file examples/sample_result.json
+
+--------------------------------------------------------------------------------
+6. 错误场景演示 (预期失败)
+--------------------------------------------------------------------------------
+
+# 不支持的位宽组合 (INT4 只支持 4-bit)
+python -m llm_quant_analyzer analyze --family int4 --bit-width 8
+# 预期退出码: 3 (E_UNSUPPORTED_COMBINATION)
+
+# 无效的量化族
+python -m llm_quant_analyzer analyze --family invalid --bit-width 8
+# 预期退出码: 1 (E_INVALID_FAMILY)
+
+# 验证缺少字段的 JSON
+echo '{"relative_latency": 0.7}' | python -m llm_quant_analyzer validate
+# 预期退出码: 4 (E_MISSING_FIELD)
+
+# 验证无效值 (相对延迟为 0)
+echo '{"baseline_config":{"family":"fp16","bit_width":16},"quant_config":{"family":"int8","bit_width":8},"relative_latency":0.0,"relative_memory":0.25,"quality_risk_level":0.0}' | python -m llm_quant_analyzer validate
+# 预期退出码: 6 (E_INVALID_VALUE)
+
+# 验证无效值 (负数值)
+echo '{"baseline_config":{"family":"fp16","bit_width":16},"quant_config":{"family":"int8","bit_width":8},"relative_latency":-0.5,"relative_memory":0.25,"quality_risk_level":0.0}' | python -m llm_quant_analyzer validate
+# 预期退出码: 6 (E_INVALID_VALUE)
+
+--------------------------------------------------------------------------------
+7. 运行单元测试
+--------------------------------------------------------------------------------
+
+# 运行所有测试
+python -m unittest discover tests -v
+
+# 运行特定测试类
+python -m unittest tests.test_core.TestBitWidthSupport -v
+python -m unittest tests.test_core.TestJSONValidation -v
+python -m unittest tests.test_core.TestExtremeValues -v
+
+# 或使用 pytest (如已安装)
+# pip install pytest
+# pytest tests/ -v
+
+--------------------------------------------------------------------------------
+8. 脚本集成示例
+--------------------------------------------------------------------------------
+
+#!/bin/bash
+
+# 完整工作流示例
+echo "=== 分析 GGUF Q4_K_M 量化 ==="
+RESULT=$(python -m llm_quant_analyzer analyze --family gguf --bit-width 4)
+echo "分析结果:"
+echo "$RESULT"
+
+echo ""
+echo "=== 验证结果 ==="
+echo "$RESULT" | python -m llm_quant_analyzer validate 2>&1
+if [ $? -eq 0 ]; then
+    echo "验证通过!"
+else
+    echo "验证失败!"
+    exit 1
+fi
+
+echo ""
+echo "=== 提取关键指标 ==="
+RELATIVE_LATENCY=$(echo "$RESULT" | python -c "import sys,json; print(json.load(sys.stdin)['relative_latency'])")
+RELATIVE_MEMORY=$(echo "$RESULT" | python -c "import sys,json; print(json.load(sys.stdin)['relative_memory'])")
+QUALITY_RISK=$(echo "$RESULT" | python -c "import sys,json; print(json.load(sys.stdin)['quality_risk_level'])")
+
+echo "相对延迟: ${RELATIVE_LATency}x (小于1表示更快)"
+echo "相对内存: ${RELATIVE_MEMORY}x (小于1表示更小)"
+echo "质量风险: ${QUALITY_RISK} (0.0=LOW, 0.5=MEDIUM, 1.0=HIGH)"
+
+--------------------------------------------------------------------------------
+9. 可选依赖说明
+--------------------------------------------------------------------------------
+
+本工具无强制第三方依赖。以下为可选依赖:
+
+- pytest: 更丰富的测试输出 (pip install pytest)
+- jq: 命令行 JSON 处理 (非 Python 包，系统包管理器安装)
+
+降级行为:
+- 无 pytest 时: 使用 python -m unittest 运行测试
+- 无 jq 时: 使用 python 内联脚本处理 JSON (如上面示例)
+
+--------------------------------------------------------------------------------
+10. 完整测试通过检查清单
+--------------------------------------------------------------------------------
+
+[ ] python -m llm_quant_analyzer --help
+[ ] python -m llm_quant_analyzer list
+[ ] python -m llm_quant_analyzer list --json
+[ ] python -m llm_quant_analyzer analyze --family int8 --bit-width 8
+[ ] python -m llm_quant_analyzer analyze --family int4 --bit-width 4
+[ ] python -m llm_quant_analyzer analyze --family gguf --bit-width 4
+[ ] python -m llm_quant_analyzer validate --file examples/sample_result.json
+[ ] python -m llm_quant_analyzer validate --help-errors
+[ ] python -m unittest discover tests -v
